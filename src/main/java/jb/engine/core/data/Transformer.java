@@ -55,21 +55,21 @@ enum Transformer {
     private final Function<Object, Object> toDbTransformer;
     private final Function<Object, Object> fromDbTransformer;
 
-    private static final Map<DatabaseToolkit.JavaClassSqlTypePair, Transformer> JAVA_AND_SQLTYPE_TO_TRANSFORMER_MAP = Map.ofEntries(
-            Map.entry(DatabaseToolkit.JavaClassSqlTypePair.of(String.class, SQLiteType.TEXT), NONE),
-            Map.entry(DatabaseToolkit.JavaClassSqlTypePair.of(Integer.class, SQLiteType.INTEGER), NONE),
-            Map.entry(DatabaseToolkit.JavaClassSqlTypePair.of(byte[].class, SQLiteType.BLOB), NONE),
-            Map.entry(DatabaseToolkit.JavaClassSqlTypePair.of(Boolean.class, SQLiteType.INTEGER), BOOLEAN_TO_INT),
-            Map.entry(DatabaseToolkit.JavaClassSqlTypePair.of(Instant.class, SQLiteType.INTEGER), INSTANT_TO_INT),
-            Map.entry(DatabaseToolkit.JavaClassSqlTypePair.of(Path.class, SQLiteType.TEXT), PATH_TO_STRING),
-            Map.entry(DatabaseToolkit.JavaClassSqlTypePair.of(HashMap.class, SQLiteType.BLOB), HASHMAP_OF_STRING_BYTEBUFFER_TO_BYTE),
-            Map.entry(DatabaseToolkit.JavaClassSqlTypePair.of(CopyType.class, SQLiteType.INTEGER), COPY_TYPE_TO_INT)
+    private static final Map<JavaClassSqlTypePair, Transformer> JAVA_AND_SQLTYPE_TO_TRANSFORMER_MAP = Map.ofEntries(
+            Map.entry(JavaClassSqlTypePair.of(String.class, SQLiteType.TEXT), NONE),
+            Map.entry(JavaClassSqlTypePair.of(Integer.class, SQLiteType.INTEGER), NONE),
+            Map.entry(JavaClassSqlTypePair.of(byte[].class, SQLiteType.BLOB), NONE),
+            Map.entry(JavaClassSqlTypePair.of(Boolean.class, SQLiteType.INTEGER), BOOLEAN_TO_INT),
+            Map.entry(JavaClassSqlTypePair.of(Instant.class, SQLiteType.INTEGER), INSTANT_TO_INT),
+            Map.entry(JavaClassSqlTypePair.of(Path.class, SQLiteType.TEXT), PATH_TO_STRING),
+            Map.entry(JavaClassSqlTypePair.of(HashMap.class, SQLiteType.BLOB), HASHMAP_OF_STRING_BYTEBUFFER_TO_BYTE),
+            Map.entry(JavaClassSqlTypePair.of(CopyType.class, SQLiteType.INTEGER), COPY_TYPE_TO_INT)
     );
 
     /**
      * Returns a suiting transformer for teh given type pair. Throws {@link NullPointerException} if no transformer could be found.
      */
-    public static Transformer getTransformerFor(DatabaseToolkit.JavaClassSqlTypePair javaClassSqlTypePair) {
+    public static Transformer getTransformerFor(JavaClassSqlTypePair javaClassSqlTypePair) {
         return Objects.requireNonNull(JAVA_AND_SQLTYPE_TO_TRANSFORMER_MAP.getOrDefault(javaClassSqlTypePair, null),
                 "Could not find a transformer for pair " + javaClassSqlTypePair);
     }
@@ -96,4 +96,41 @@ enum Transformer {
         return fromDbTransformer.apply(o);
     }
 
+    /**
+     * Declares a Pair of a java type and a sqlite data type that belong to each other
+     */
+    public static class JavaClassSqlTypePair {
+        private final Class<?> javaType;
+        private final SQLiteType sqliteType;
+
+        public static JavaClassSqlTypePair of(Class<?> javaType, SQLiteType sqliteType) {
+            return new JavaClassSqlTypePair(javaType, sqliteType);
+        }
+
+        private JavaClassSqlTypePair(Class<?> javaType, SQLiteType sqliteType) {
+            this.javaType = javaType;
+            this.sqliteType = sqliteType;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            JavaClassSqlTypePair that = (JavaClassSqlTypePair) o;
+            return Objects.equals(javaType, that.javaType) && sqliteType == that.sqliteType;
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(javaType, sqliteType);
+        }
+
+        @Override
+        public String toString() {
+            return "JavaClassSqlTypePair{" +
+                    "javaType=" + javaType +
+                    ", sqliteType=" + sqliteType +
+                    '}';
+        }
+    }
 }

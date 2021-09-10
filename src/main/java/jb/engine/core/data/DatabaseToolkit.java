@@ -467,7 +467,7 @@ public class DatabaseToolkit<T> {
                     if(colName == null || colName.isEmpty()) {
                         colName = toSnakeCase(f.getName());
                     }
-                    Transformer transformer = Transformer.getTransformerFor(JavaClassSqlTypePair.of(
+                    Transformer transformer = Transformer.getTransformerFor(Transformer.JavaClassSqlTypePair.of(
                             f.getType(),
                             declaredAnnotation.sqliteType()
                     ));
@@ -527,44 +527,6 @@ public class DatabaseToolkit<T> {
 
         public Transformer getTransformer() {
             return transformer;
-        }
-    }
-
-    /**
-     * Declares a Pair of a java type and a sqlite data type that belong to each other
-     */
-    public static class JavaClassSqlTypePair {
-        private final Class<?> javaType;
-        private final SQLiteType sqliteType;
-
-        public static JavaClassSqlTypePair of(Class<?> javaType, SQLiteType sqliteType) {
-            return new JavaClassSqlTypePair(javaType, sqliteType);
-        }
-
-        private JavaClassSqlTypePair(Class<?> javaType, SQLiteType sqliteType) {
-            this.javaType = javaType;
-            this.sqliteType = sqliteType;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            JavaClassSqlTypePair that = (JavaClassSqlTypePair) o;
-            return Objects.equals(javaType, that.javaType) && sqliteType == that.sqliteType;
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(javaType, sqliteType);
-        }
-
-        @Override
-        public String toString() {
-            return "JavaClassSqlTypePair{" +
-                    "javaType=" + javaType +
-                    ", sqliteType=" + sqliteType +
-                    '}';
         }
     }
 

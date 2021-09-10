@@ -11,7 +11,6 @@ import java.util.function.Consumer;
  */
 public class CopyProgress {
 
-    private final String id;
     /**
      * Consumer that is notified whenever a change is made to one of these properties.
      */
@@ -20,6 +19,8 @@ public class CopyProgress {
     private Long trueFileCount = 0L;
     private Long directoryCount = 0L;
     private Long processedCount = 0L;
+
+    private String name;
 
     /**
      * Initializes the copy progress with 0 as the initial amount of files.
@@ -36,8 +37,8 @@ public class CopyProgress {
         return new CopyProgress(GeneralUtils.getNowAsId(), cp -> {});
     }
 
-    private CopyProgress(String id, Consumer<CopyProgress> updateConsumer) {
-        this.id = id;
+    private CopyProgress(String name, Consumer<CopyProgress> updateConsumer) {
+        this.name = name;
         this.updateConsumer = updateConsumer;
     }
 
@@ -82,8 +83,8 @@ public class CopyProgress {
     // ---------- Getter
 
 
-    public String getId() {
-        return id;
+    public String getName() {
+        return name;
     }
 
     public Long getTotalFileCount() {
@@ -100,5 +101,11 @@ public class CopyProgress {
 
     public Long getDirectoryCount() {
         return directoryCount;
+    }
+
+    // ---------- Setter
+
+    public void setName(String name) {
+        this.name = name;
     }
 }
