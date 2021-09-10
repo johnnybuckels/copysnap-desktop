@@ -4,40 +4,67 @@ import jb.engine.reporting.CopyProgress;
 import jb.engine.reporting.ProblemReport;
 import jb.gui.constants.CopySnapGeometry;
 import jb.gui.exceptions.CopySnapException;
-import jb.gui.exceptions.CopySnapReportException;
 import jb.gui.windows.CopySnapProgressFrame;
 import jb.gui.windows.listeners.SubWindowListener;
 
 import javax.swing.*;
 import java.awt.*;
-import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 /**
  * Class for executing any job returning a {@link ProblemReport}. It is also able to consume intermediate results in the
  * form of {@link CopyProgress}.<br>
  * This class is designed to <b>replace</b> all other Worker-Classes.
+ * @param <T> return value type of the job executed by this worker
+ * @param <U> intermediate return value type of the job executed by this worker
  */
-public class BackgroundWorker extends SwingWorker<ProblemReport, CopyProgress> {
+public class BackgroundWorker<T, U> extends SwingWorker<T, U> {
 
     private static final int PREFERRED_PROGRESS_BAR_WIDTH = 400;
 
-    private final Function<Consumer<CopyProgress>, ProblemReport> jobToDoWithIntermediateConsumer;
+    private final Function<Consumer<U>, T> jobToDoWithIntermediateConsumer;
     private final boolean showIntermediateResults;
     private final String jobName;
-    private final Runnable externalDoneRunnable;
-    private final List<Function<CopyProgress, Object>> valueGetter;
-    private final Function<CopyProgress, Integer> progressFunction;
+    private final Consumer<T> resultConsumer;
+    private final Runnable doneRunnable;
+    private final List<Function<U, Object>> valueGetter;
+    private final Function<U, Integer> progressFunction;
     private final String stringMessageTemplate;
 
     private CopySnapProgressFrame copySnapProgressFrame;
     private JProgressBar progressBar;
 
-    public static BackgroundWorkerBuilder builder() {
-        return new BackgroundWorkerBuilder();
+    // ----- Builder
+
+    /**
+     * Background job to do.
+     */
+    public static BackgroundWorkerBuilder<Void, Void> builderForJob(Runnable job) {
+        return new BackgroundWorkerBuilder<>(copyProgressConsumer -> {
+                    job.run();
+                    return null;
+                },
+                Void.class
+        );
+    }
+
+    /**
+     * Background job to execute resulting in some object.
+     */
+    public static <X> BackgroundWorkerBuilder<X, Void> builderForJob(Supplier<X> job) {
+        return new BackgroundWorkerBuilder<>(copyProgressConsumer -> job.get(), Void.class);
+    }
+
+    /**
+     * The given job is of the form 'Consumer<CopyProgress> -> ProblemReport', where the given argument is a function consuming
+     * a {@link CopyProgress} which is called whenever progress to the actual job that is producing the result is made.
+     */
+    public static <X, Y> BackgroundWorkerBuilder<X, Y> builderForJob(Function<Consumer<Y>, X> jobToDoWithIntermediateConsumer, Class<Y> intermediateResultType) {
+        return new BackgroundWorkerBuilder<>(jobToDoWithIntermediateConsumer, intermediateResultType);
     }
 
     /**
@@ -46,25 +73,29 @@ public class BackgroundWorker extends SwingWorker<ProblemReport, CopyProgress> {
      * <p>The given job is of the form 'Consumer<CopyProgress> -> ProblemReport', where the given argument is a function consuming
      * a {@link CopyProgress} which is called whenever progress to the actual job that is producing the ProblemReport is made.
      * </p>
-     * The external runnable is called when the job has been done, regardless of the result or exit reason.
+     * The done runnable is called when the job has been done, regardless of the result or exit reason.
      */
-    protected BackgroundWorker(Function<Consumer<CopyProgress>, ProblemReport> jobToDoWithIntermediateConsumer,
-                            String jobName,
-                            Runnable externalDoneRunnable,
-                            boolean showIntermediateResults,
-                            String stringMessageTemplate,
-                            List<Function<CopyProgress, Object>> valueGetter,
-                            Function<CopyProgress, Integer> progressFunction
+    protected BackgroundWorker(Function<Consumer<U>, T> jobToDoWithIntermediateConsumer,
+                               String jobName,
+                               Consumer<T> resultConsumer,
+                               Runnable doneRunnable,
+                               boolean showIntermediateResults,
+                               String stringMessageTemplate,
+                               List<Function<U, Object>> valueGetter,
+                               Function<U, Integer> progressFunction
     ) {
         this.jobToDoWithIntermediateConsumer = jobToDoWithIntermediateConsumer;
-        this.showIntermediateResults = showIntermediateResults;
         this.jobName = jobName;
-        this.externalDoneRunnable = externalDoneRunnable;
+        this.resultConsumer = resultConsumer;
+        this.doneRunnable = doneRunnable;
+        this.showIntermediateResults = showIntermediateResults;
         this.stringMessageTemplate = stringMessageTemplate;
         this.valueGetter = valueGetter;
         this.progressFunction = progressFunction;
         arrangeContents();
     }
+
+    // ----- Functionality
 
     private void arrangeContents() {
         JButton cancelButton = new JButton("Cancel");
@@ -81,44 +112,37 @@ public class BackgroundWorker extends SwingWorker<ProblemReport, CopyProgress> {
 
 
     @Override
-    public ProblemReport doInBackground() {
+    public T doInBackground() {
         return jobToDoWithIntermediateConsumer.apply(this::publish);
     }
 
     @Override
-    protected void process(List<CopyProgress> chunks) {
-        if(!showIntermediateResults) {
+    protected void process(List<U> chunks) {
+        if (!showIntermediateResults) {
             return;
         }
-        chunks.stream()
-                .sorted(Comparator.comparingLong(CopyProgress::getProcessedCount))
-                .forEach(copyProgress -> {
-                            copySnapProgressFrame.setAdditionalLabelText(
-                                    String.format(stringMessageTemplate, valueGetter.stream().map(getter -> getter.apply(copyProgress)).toArray())
-                            );
-                            if(progressFunction != null) {
-                                progressBar.setValue(progressFunction.apply(copyProgress));
-                            }
-                        }
-                );
+        chunks.forEach(chunk -> {
+                    copySnapProgressFrame.setAdditionalLabelText(
+                            String.format(stringMessageTemplate, valueGetter.stream().map(getter -> getter.apply(chunk)).toArray())
+                    );
+                    if (progressFunction != null) {
+                        progressBar.setValue(progressFunction.apply(chunk));
+                    }
+                }
+        );
     }
 
     @Override
     protected void done() {
-        ProblemReport report;
+        T result;
         try {
-            report = get();
-            if(report == null) {
-                throw new CopySnapReportException("The returned report of job " + jobName + " was null");
-            }
-            if(report.getEncounteredProblemCount() > 0) {
-                throw new CopySnapReportException("Encountered problems while executing job " + jobName, report);
-            }
+            result = get();
+            resultConsumer.accept(result);
         } catch (InterruptedException | ExecutionException e) {
             throw new CopySnapException("Could not retrieve report from job " + jobName + ": " + e, e);
         } finally {
             cancelTaskAndDissolvePanel();
-            externalDoneRunnable.run();
+            doneRunnable.run();
         }
     }
 

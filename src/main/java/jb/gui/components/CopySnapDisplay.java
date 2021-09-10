@@ -260,9 +260,8 @@ public class CopySnapDisplay extends JPanel {
             } else {
                 throw new CopySnapException("Given to-path is invalid: " + toPath);
             }
-            BackgroundWorker.builder()
+            BackgroundWorker.builderForJob(() -> CopyService.createCopyService(actualTargetPath == null ? Path.of("/") : actualTargetPath, fromPath).plainCopy())
                     .withJobName("Restoring")
-                    .withJob(() -> CopyService.createCopyService(actualTargetPath == null ? Path.of("/") : actualTargetPath, fromPath).plainCopy())
                     .withDoneRunnable(this::refreshTreeView)
                     .build()
                     .showAndExecute();
@@ -270,9 +269,8 @@ public class CopySnapDisplay extends JPanel {
             // execute override copy
             // copy service is configured to write INTO a directory. in order to override the field at toPath we need to give its parent to the copy service
             actualTargetPath = toPath.getParent();
-            BackgroundWorker.builder()
+            BackgroundWorker.builderForJob(() -> CopyService.createCopyService(actualTargetPath == null ? Path.of("/") : actualTargetPath, fromPath).plainCopyOverride())
                     .withJobName("Restoring")
-                    .withJob(() -> CopyService.createCopyService(actualTargetPath == null ? Path.of("/") : actualTargetPath, fromPath).plainCopyOverride())
                     .withDoneRunnable(this::refreshTreeView)
                     .build()
                     .showAndExecute();

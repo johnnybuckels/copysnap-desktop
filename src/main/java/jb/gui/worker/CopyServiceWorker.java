@@ -23,8 +23,6 @@ import java.util.function.Supplier;
 @Deprecated
 public class CopyServiceWorker extends SwingWorker<ProblemReport, CopyProgress>{
 
-    // TODO: replace occurrences with BackgroundWorker
-
     private static final String ANALYZED_FILE_COUNT_STRING_TEMPLATE = "Analyzed files: %s (%s regular files, %s directories)";
     private static final int PREFERRED_PROGRESS_BAR_WIDTH = 400;
 

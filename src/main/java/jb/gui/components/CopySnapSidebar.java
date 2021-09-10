@@ -148,9 +148,8 @@ public class CopySnapSidebar extends JPanel {
         SnapshotNameDialog dialog = new SnapshotNameDialog();
         if(dialog.showDialog("Plain Copy") == JOptionPane.OK_OPTION) {
             String runName = getValidatedTextFieldContent(dialog.nameField);
-            BackgroundWorker.builder()
+            BackgroundWorker.builderForJob(copyProgress -> context.plainCopyAndSave(runName, copyProgress), CopyProgress.class)
                     .withJobName("Creating plain copy")
-                    .withJob(copyProgress -> context.plainCopyAndSave(runName, copyProgress))
                     .withDoneRunnable(this::refreshListDisplay)
                     .withStringMessage(ANALYZED_FILE_COUNT_STRING_TEMPLATE, List.of(CopyProgress::getTotalFileCount, CopyProgress::getTrueFileCount, CopyProgress::getDirectoryCount))
                     .showIntermediateResults(true)
@@ -178,9 +177,8 @@ public class CopySnapSidebar extends JPanel {
         SnapshotNameDialog dialog = new SnapshotNameDialog();
         if(dialog.showDialog("New Snapshot") == JOptionPane.OK_OPTION) {
             String runName = getValidatedTextFieldContent(dialog.nameField);
-            BackgroundWorker.builder()
+            BackgroundWorker.builderForJob(copyProgress -> context.snapshotAndSave(runName, copyProgress), CopyProgress.class)
                     .withJobName("Creating Snapshot")
-                    .withJob(copyProgress -> context.snapshotAndSave(runName, copyProgress))
                     .withDoneRunnable(this::refreshListDisplay)
                     .withStringMessage(ANALYZED_FILE_COUNT_STRING_TEMPLATE, List.of(CopyProgress::getTotalFileCount, CopyProgress::getTrueFileCount, CopyProgress::getDirectoryCount))
                     .withProgressFunction(copyProgress -> copyProgress.getPercentage().intValue())
@@ -205,9 +203,8 @@ public class CopySnapSidebar extends JPanel {
         if(result != JOptionPane.YES_OPTION) {
             return;
         }
-        BackgroundWorker.builder()
+        BackgroundWorker.builderForJob(() -> context.deleteSnapshotAndSave(currentSelectedSnapshot))
                 .withJobName("Deleting snapshot")
-                .withJob(() -> context.deleteSnapshotAndSave(currentSelectedSnapshot))
                 .withDoneRunnable(this::refreshListDisplay)
                 .build()
                 .showAndExecute();
@@ -224,7 +221,7 @@ public class CopySnapSidebar extends JPanel {
     }
 
     /**
-     * Simple class for showing a dialog to to retrieve a user input String.
+     * Simple class for showing a dialog to retrieve a user input String.
      */
     private static class SnapshotNameDialog extends JPanel {
 
