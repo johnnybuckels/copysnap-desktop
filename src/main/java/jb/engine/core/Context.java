@@ -11,6 +11,7 @@ import jb.engine.utils.PathUtils;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -130,10 +131,14 @@ public class Context {
     /**
      * Given a path pointing to a directory created by CopySnap, this method tries to recreate a context object from that
      * location by recomputing checksum maps.
-     * @param sourcePath the path pointing to the source directory where the top be reconstructed context belongs to
      * @param homePath the path pointing to a home directory that was created by CopySnap
+     * @param percentageConsumer a consumer that is notified whenever progress to the completion of this job was made,
+     *                           transporting the percentage value in [0, 1].
      */
-    public static Context reconstructContext(Path sourcePath, Path homePath, Consumer<CopyProgress> copyProgressConsumer) {
+    public static Context reconstructContext(Path homePath, Consumer<BigDecimal> percentageConsumer) {
+        // load source bath from backup file
+        Path sourcePath = Path.of(Context.readBackupFileContent(homePath).get(SOURCE_KEY));
+        logger.info("Source path info from backup file loaded: " + sourcePath);
         // search for source path and home path in database
         Optional<Context> foundContextOpt = restoreContextFromDatabase(homePath);
         if(foundContextOpt.isPresent()) {
@@ -141,6 +146,7 @@ public class Context {
             if(!foundContext.getSourcePath().equals(sourcePath)) {
                 throw new IllegalArgumentException("Found context in database with matching home path " + homePath + " but unequal source paths: (given source) " + sourcePath + ", (encountered source) " + foundContext.getSourcePath());
             }
+            percentageConsumer.accept(BigDecimal.ONE);
             return foundContext;
         }
         // restore context from data on disk
@@ -154,20 +160,23 @@ public class Context {
         } catch(IOException e) {
             throw new UncheckedIOException("Could not iterate over file stream to retrieve target directories in " + contextToRestore.allPaths.get(TARGET_KEY) + ": " + e, e);
         }
+        targetPaths.sort(Comparator.reverseOrder());  // sort such that newest snapshot items are restored first
+        int doneTargetPathCount = 0;
         for(Path targetPath : targetPaths) {
-            CopyProgress currentProgress = CopyProgress.withProgressConsumer(copyProgressConsumer);
+            percentageConsumer.accept(BigDecimal.valueOf((double)doneTargetPathCount/targetPaths.size()));
             Path actualPathForChecksum = targetPath.resolve(sourcePath.getFileName());
             if(!Files.isDirectory(actualPathForChecksum)) {
                 logger.warning("Expected directory at " + actualPathForChecksum + ": Skipping reconstruction of snapshot info at path " + targetPath);
             }
             try {
-                // TODO: ggf ein CopyProgress pro gemachten snapshot erstellen und notifyen
-                HashMap<Path, ByteBuffer> targetChecksumMap = HashService.computeChecksumMap(actualPathForChecksum, currentProgress);
+                HashMap<Path, ByteBuffer> targetChecksumMap = HashService.computeChecksumMap(actualPathForChecksum);
                 contextToRestore.addSnapshotInfoOfRun(targetPath.getFileName() + "_restored", targetPath, targetChecksumMap, CopyType.RESTORED, false);
             } catch (Exception e) {
                 logger.warning("Could not compute checksum map: Skipping reconstruction of snapshot info at path " + targetPath);
             }
+            doneTargetPathCount++;
         }
+        percentageConsumer.accept(BigDecimal.valueOf((double)doneTargetPathCount/targetPaths.size()));
         contextToRestore.save();
         return contextToRestore;
     }
@@ -359,6 +368,25 @@ public class Context {
     }
 
     // -------------------- Internal Methods
+
+    private static Map<String, String> readBackupFileContent(Path homePath) {
+        Path expectedBackupFilePath = homePath.resolve(DIRECTORY_NAME_INTERNAL_DATA).resolve(FILE_NAME_BACKUP);
+        List<String> lines;
+        try {
+            lines = Files.readAllLines(expectedBackupFilePath);
+        } catch(IOException e) {
+            throw new ContextException("Could not read  information from backup file at expected location " + expectedBackupFilePath + ": " + e, e);
+        }
+        Map<String, String> out = new HashMap<>();
+        lines.forEach(line -> {
+            String[] keyValue = line.split(BACKUP_FILE_DELIMITER);
+            if(keyValue.length != 2) {
+                throw new ContextException("Could not extract key and value of backup file line: " + line);
+            }
+            out.put(keyValue[0], keyValue[1]);
+        });
+        return out;
+    }
 
     private Map<String, Path> createInternalPathMapOfContext(Path sourcePath, Path homePath) {
         Map<String, Path> allPaths = new HashMap<>();

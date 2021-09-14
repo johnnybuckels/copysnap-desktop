@@ -1,13 +1,15 @@
 package jb.gui.windows;
 
 import jb.gui.constants.CopySnapFonts;
+import jb.gui.constants.CopySnapGeometry;
 
 import javax.swing.*;
 import java.awt.*;
 
 public class CopySnapProgressFrame extends JFrame {
 
-    private final static Dimension PREFERRED_DIMENSION = new Dimension(400, 200);
+    private final static Dimension PREFERRED_DIMENSION = new Dimension(600, 240);
+    private final static int PROGRESSBAR_PREFERRED_WIDTH = 540;
 
     private final JLabel label = new JLabel();
     private final JLabel additionalLabel = new JLabel();
@@ -50,6 +52,7 @@ public class CopySnapProgressFrame extends JFrame {
 
         setTitle(this.getClass().getSimpleName());
         setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
+        progressBar.setPreferredSize(new Dimension(PROGRESSBAR_PREFERRED_WIDTH, CopySnapGeometry.BUTTON_HEIGHT));
         setPreferredSize(PREFERRED_DIMENSION);
         pack();
         setLocationRelativeTo(null);
