@@ -2,12 +2,14 @@ package jb.gui.actions;
 
 import jb.engine.core.Context;
 import jb.gui.components.HomeSourceDialogPanel;
-import jb.gui.exceptions.CopySnapException;
+import jb.gui.exceptions.InvalidPathSelectionException;
+import jb.gui.utils.MessageUtils;
 import jb.gui.windows.MainWindow;
 
 import javax.swing.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.nio.file.Path;
 import java.util.function.Consumer;
 
 public class NewContextAction implements ActionListener {
@@ -26,27 +28,30 @@ public class NewContextAction implements ActionListener {
     }
 
     public Context show(JFrame parent) {
-        HomeSourceDialogPanel homeSourceDialogPanel = new HomeSourceDialogPanel();
-        Integer response = null;
-        while(response == null) {
-            Thread.onSpinWait();
-            response = homeSourceDialogPanel.showDialog(parent,
+        HomeSourceDialogPanel homeSourceDialogPanel = new HomeSourceDialogPanel();;
+        boolean invalidPathsGiven = true;
+        Context context = null;
+        while(invalidPathsGiven) {
+            int response = homeSourceDialogPanel.showDialog(parent,
                     homeSourceDialogPanel.getHomeBar().getPlainTextContent(),
                     homeSourceDialogPanel.getSourceBar().getPlainTextContent(),
                     "New Context",
                     "Choose a location where the new context's home directory should be created and where CopySnap can find the source directory."
             );
             if (response == JOptionPane.OK_OPTION) {
-                Context context;
-                try {
-                    context = Context.createNewContextAndInitialise(homeSourceDialogPanel.getSourceBar().getPath(), homeSourceDialogPanel.getHomeBar().getPath());
-                } catch (Exception e) {
-                    throw new CopySnapException("Could not create new context: " + e, e);
-                }
-               return context;
+                // cancel option
+                return null;
             }
+            try {
+                Path sourcePath = homeSourceDialogPanel.getSourceBar().getPath();
+                Path homePath = homeSourceDialogPanel.getHomeBar().getPath();
+                context = Context.createNewContextAndInitialise(sourcePath, homePath);
+            } catch (InvalidPathSelectionException e) {
+                MessageUtils.showInfoMessage(null, "Given paths were invalid: " + e, "Invalid paths");
+            }
+            invalidPathsGiven = false;
         }
-        return null;
+        return context;
     }
 
 }

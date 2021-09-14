@@ -43,19 +43,23 @@ public class LoadContextAction implements ActionListener {
                     );
             return null;
         }
-        Context loadedContext;
-        String contextId = ((ContextInfoContainer) JOptionPane.showInputDialog(parent,
+        ContextInfoContainer chosenContextInfoContainer = (ContextInfoContainer) JOptionPane.showInputDialog(parent,
                 "Choose a context to load:",
                 "Load Context",
                 JOptionPane.PLAIN_MESSAGE,
                 null,
                 contextHomePaths,
                 contextHomePaths[0]
-        )).getId();
+        );
+        if(chosenContextInfoContainer == null) {
+            // cancel-option
+            return null;
+        }
+        Context loadedContext;
         try {
-            loadedContext = Context.loadContextById(contextId);
+            loadedContext = Context.loadContextById(chosenContextInfoContainer.getId());
         } catch (NotFoundException | DatabaseCommunicationException e) {
-            throw new CopySnapException("Could not load context with id: " + contextId + ": " + e, e);
+            throw new CopySnapException("Could not load context with id: " + chosenContextInfoContainer.getId() + ": " + e, e);
         }
         return loadedContext;
     }
