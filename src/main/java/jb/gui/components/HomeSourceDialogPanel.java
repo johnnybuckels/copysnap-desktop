@@ -1,25 +1,29 @@
 package jb.gui.components;
 
 import jb.gui.constants.CopySnapFonts;
-import jb.gui.windows.listeners.ComponentShownListener;
+import jb.gui.worker.FocusGetter;
 
 import javax.swing.*;
 import java.awt.*;
 
-public class HomeSourceDialogPanel extends JPanel{
+public class HomeSourceDialogPanel extends JPanel {
 
     private final PathSelectionBar homeBar;
     private final PathSelectionBar sourceBar;
+    private final JLabel label;
 
     public HomeSourceDialogPanel() {
         homeBar = new PathSelectionBar("Home directory location");
         sourceBar = new PathSelectionBar("Source directory location");
+        label = new JLabel();
+        arrangeDialogContent();
     }
 
     public int showDialog(Component parent, String initialHome, String initialSource, String title, String text) {
         homeBar.validateAndSetTextFieldValue(initialHome);
         sourceBar.validateAndSetTextFieldValue(initialSource);
-        arrangeDialogContent(text);
+        label.setText(text);
+        new FocusGetter(homeBar.getTextField()).tryToGetFocus();
         return JOptionPane.showConfirmDialog(
                 parent,
                 this,
@@ -29,10 +33,9 @@ public class HomeSourceDialogPanel extends JPanel{
         );
     }
 
-    private void arrangeDialogContent(String text) {
+    private void arrangeDialogContent() {
         this.setLayout(new BoxLayout(this, BoxLayout.PAGE_AXIS));
         // text
-        JLabel label = new JLabel(text);
         label.setFont(CopySnapFonts.LABEL_TEXT_FONT);
         label.setAlignmentX(LEFT_ALIGNMENT);
         homeBar.setAlignmentX(LEFT_ALIGNMENT);
@@ -43,7 +46,6 @@ public class HomeSourceDialogPanel extends JPanel{
         this.add(Box.createRigidArea(new Dimension(0, 10)));
         this.add(sourceBar);
         this.setPreferredSize(new Dimension(900, 100));
-        homeBar.addComponentListener(new ComponentShownListener(componentEvent -> homeBar.requestFocus()));
     }
 
     public PathSelectionBar getHomeBar() {
