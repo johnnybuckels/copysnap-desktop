@@ -2,13 +2,11 @@ package jb.gui.worker;
 
 import jb.engine.reporting.CopyProgress;
 import jb.engine.reporting.ProblemReport;
-import jb.gui.constants.CopySnapGeometry;
+import jb.gui.components.listeners.SubWindowListener;
 import jb.gui.exceptions.CopySnapException;
 import jb.gui.windows.CopySnapProgressFrame;
-import jb.gui.windows.listeners.SubWindowListener;
 
 import javax.swing.*;
-import java.awt.*;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
@@ -23,8 +21,6 @@ import java.util.function.Supplier;
  * @param <U> intermediate return value type of the job executed by this worker
  */
 public class BackgroundWorker<T, U> extends SwingWorker<T, U> {
-
-    private static final int PREFERRED_PROGRESS_BAR_WIDTH = 400;
 
     private final Function<Consumer<U>, T> jobToDoWithIntermediateConsumer;
     private final boolean showIntermediateResults;
@@ -101,7 +97,6 @@ public class BackgroundWorker<T, U> extends SwingWorker<T, U> {
         JButton cancelButton = new JButton("Cancel");
         cancelButton.addActionListener(action -> this.cancelTaskAndDissolvePanel());
         progressBar = new JProgressBar();
-        progressBar.setPreferredSize(new Dimension(PREFERRED_PROGRESS_BAR_WIDTH, CopySnapGeometry.BUTTON_HEIGHT));
         // progress bar
         progressBar.setMinimum(0);
         progressBar.setMaximum(100);
@@ -126,7 +121,8 @@ public class BackgroundWorker<T, U> extends SwingWorker<T, U> {
                             String.format(stringMessageTemplate, valueGetter.stream().map(getter -> getter.apply(chunk)).toArray())
                     );
                     if (progressFunction != null) {
-                        progressBar.setValue(progressFunction.apply(chunk));
+                        int computedPercentage = progressFunction.apply(chunk);
+                        progressBar.setValue(Math.max(Math.min(computedPercentage, 100), 0));
                     }
                 }
         );
@@ -153,6 +149,7 @@ public class BackgroundWorker<T, U> extends SwingWorker<T, U> {
     }
 
     private void cancelTaskAndDissolvePanel() {
+        copySnapProgressFrame.setVisible(false);
         cancel(true);
         copySnapProgressFrame.dispose();
     }

@@ -78,6 +78,8 @@ public class BackgroundWorkerBuilder<T, U> {
 
     /**
      * The function used to fill a progress bar. If set to {@code null} (the default), an indefinite progress bar will be displayed.
+     * The progress is measured in a percentage int value ranging from 0 to 100. Ensure that the given percentage method always provides
+     * an integer value from 0 to 100. Values outside this range will be rounded down or up respectively.
      */
     public BackgroundWorkerBuilder<T, U> withProgressFunction(Function<U, Integer> progressFunction) {
         this.progressFunction = progressFunction;

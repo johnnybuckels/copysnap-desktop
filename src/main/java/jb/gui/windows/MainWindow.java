@@ -5,15 +5,19 @@ import jb.engine.core.SnapshotInfo;
 import jb.gui.actions.ExitAction;
 import jb.gui.actions.LoadContextAction;
 import jb.gui.actions.NewContextAction;
-import jb.gui.actions.RestoreContextAction;
+import jb.gui.actions.PathAction;
 import jb.gui.components.CopySnapDisplay;
 import jb.gui.components.CopySnapMenuBar;
 import jb.gui.components.CopySnapSidebar;
 import jb.gui.utils.MessageUtils;
+import jb.gui.worker.BackgroundWorker;
 
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.KeyEvent;
+import java.math.BigDecimal;
+import java.math.MathContext;
+import java.nio.file.Path;
 
 import static jb.gui.constants.CopySnapFonts.MENU_FONT;
 import static jb.gui.constants.CopySnapFonts.MENU_ITEM_FONT;
@@ -72,7 +76,7 @@ public class MainWindow extends JFrame {
         contextItemLoadContext.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_L, KeyEvent.CTRL_DOWN_MASK));
         contextMenu.add(contextItemLoadContext);
         JMenuItem contextItemRestoreContext = new JMenuItem("Restore from disc...");
-        contextItemRestoreContext.addActionListener(new RestoreContextAction(this, this::receiveContext));
+        contextItemRestoreContext.addActionListener(new PathAction(this, this::reconstructContext));
         contextItemRestoreContext.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_R, KeyEvent.CTRL_DOWN_MASK));
         contextMenu.add(contextItemRestoreContext);
         // Action
@@ -126,6 +130,19 @@ public class MainWindow extends JFrame {
         updateFrameTitle(context);
         transmitContextToSidebar(context);
         showSuccessfulContextRetrievalMessage(context);
+    }
+
+    private void reconstructContext(Path homePath) {
+        if(homePath == null) {
+            return;
+        }
+        BackgroundWorker.builderForJob(bigDecimalConsumer -> Context.reconstructContext(homePath, bigDecimalConsumer), BigDecimal.class)
+                .withJobName("Reconstructing context")
+                .withProgressFunction(bigDecimal -> bigDecimal.multiply(BigDecimal.valueOf(100)).round(new MathContext(0)).intValue())
+                .withResultConsumer(this::receiveContext)
+                .showIntermediateResults(true)
+                .build()
+                .showAndExecute();
     }
 
     private void showSuccessfulContextRetrievalMessage(Context context) {
