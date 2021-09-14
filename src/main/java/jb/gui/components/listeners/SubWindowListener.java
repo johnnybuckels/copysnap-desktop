@@ -1,4 +1,4 @@
-package jb.gui.windows.listeners;
+package jb.gui.components.listeners;
 
 import java.awt.event.WindowEvent;
 import java.awt.event.WindowListener;

@@ -81,7 +81,7 @@ public class DatabaseTest {
         ctx.delete();
 
         // restore context
-        Context restoredContext = Context.reconstructContext(SOURCE_PATH, ctx.getHomePath(), x -> {});
+        Context restoredContext = Context.reconstructContext(ctx.getHomePath(), x -> {});
         assertEquals(1, restoredContext.getSnapshotInfoList().size());
         HashMap<String, byte[]> restoredMap = restoredContext.getSnapshotInfoList().get(0).getRedirectedChecksumMap();
 
