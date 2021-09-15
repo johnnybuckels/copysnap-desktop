@@ -7,6 +7,7 @@ import jb.engine.exceptions.ObjectCreatorException;
  * Implementing Classes are able to create object instances with an array of arguments.
  * @param <T> The class type this ObjectCreator instantiates.
  */
+@FunctionalInterface
 public interface ObjectCreator<T> {
 
     /**

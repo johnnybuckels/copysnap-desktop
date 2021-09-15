@@ -2,6 +2,7 @@ package jb.gui.windows;
 
 import jb.engine.core.Context;
 import jb.engine.core.SnapshotInfo;
+import jb.engine.exceptions.DatabaseCommunicationException;
 import jb.gui.actions.ExitAction;
 import jb.gui.actions.LoadContextAction;
 import jb.gui.actions.NewContextAction;
@@ -9,6 +10,7 @@ import jb.gui.actions.PathAction;
 import jb.gui.components.CopySnapDisplay;
 import jb.gui.components.CopySnapMenuBar;
 import jb.gui.components.CopySnapSidebar;
+import jb.gui.exceptions.CopySnapException;
 import jb.gui.utils.MessageUtils;
 import jb.gui.worker.BackgroundWorker;
 
@@ -18,6 +20,7 @@ import java.awt.event.KeyEvent;
 import java.math.BigDecimal;
 import java.math.MathContext;
 import java.nio.file.Path;
+import java.util.Optional;
 
 import static jb.gui.constants.CopySnapFonts.MENU_FONT;
 import static jb.gui.constants.CopySnapFonts.MENU_ITEM_FONT;
@@ -39,6 +42,28 @@ public class MainWindow extends JFrame {
         sidebar = new CopySnapSidebar(this::transmitInformationToDisplay);
         display = new CopySnapDisplay();
         arrangeMainComponents();
+        loadLatestContext();
+    }
+
+    /**
+     * Loads the latest loaded or saved context from the database.
+     */
+    private void loadLatestContext() {
+        BackgroundWorker.builderForJob(() -> {
+                    Optional<Context> latestContext;
+                    try {
+                        latestContext = Context.loadLatestUsedContext();
+                    } catch (DatabaseCommunicationException e) {
+                        throw new CopySnapException("Could not retrieve last used context: " + e, e);
+                    }
+                    latestContext.ifPresentOrElse(this::receiveContext,
+                            () -> MessageUtils.showInfoMessage(this, "Create a new Context!", "No Context found")
+                    );
+                }
+        )
+                .withJobName("Loading last used context")
+                .build()
+                .showAndExecute();
     }
 
     private void arrangeMainComponents() {

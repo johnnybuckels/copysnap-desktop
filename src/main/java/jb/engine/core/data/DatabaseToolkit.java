@@ -87,6 +87,13 @@ public class DatabaseToolkit<T> {
     }
 
     /**
+     * @return list of column names associated with this toolkits object that are not primary keys.
+     */
+    public List<String> getNonPrimaryKeyColumnNames() {
+        return dataFieldList.stream().filter(dfi -> !Arrays.asList(dfi.getSqliteConstraints()).contains(SQLiteConstraint.PRIMARY_KEY)).map(DataFieldInfo::getColumnName).collect(Collectors.toList());
+    }
+
+    /**
      * @return String of column names associated with this toolkits object separated by ", "
      */
     public String getColumnNamesCommaSeparated() {
@@ -134,7 +141,7 @@ public class DatabaseToolkit<T> {
      */
     public final String generateUpdateTemplate() {
         return "UPDATE " + getTableName() + " SET " +
-                getColumnNames().stream().map(name -> name + " = ?").collect(Collectors.joining(", ")) + " WHERE " +
+                getNonPrimaryKeyColumnNames().stream().map(name -> name + " = ?").collect(Collectors.joining(", ")) + " WHERE " +
                 primaryKeyField.columnName + " = ?";
     }
 
@@ -216,14 +223,14 @@ public class DatabaseToolkit<T> {
      */
     public final void update(Connection connection, T objectToUpdate) throws DatabaseCommunicationException {
         try (PreparedStatement statement = connection.prepareStatement(generateUpdateTemplate())) {
-            int pointer = 0;  // will start with 1
+            int pointer = 1;
             // set set-values
             for(DataFieldInfo dfi : dataFieldList) {
-                pointer++;
-                if(!dfi.equals(primaryKeyField)) {
+                if(dfi.equals(primaryKeyField)) {
                     // SET values only for non-primary key fields.
-                    statement.setObject(pointer, dfi.getFieldValueForDatabase(objectToUpdate), dfi.sqliteType.getJavaSqlType());
+                    continue;
                 }
+                statement.setObject(pointer++, dfi.getFieldValueForDatabase(objectToUpdate), dfi.sqliteType.getJavaSqlType());
             }
             // set where-values at the last indexes
             statement.setObject(pointer,
@@ -462,24 +469,28 @@ public class DatabaseToolkit<T> {
             List<DataFieldInfo> out = new ArrayList<>();
             for(Field f : classType.getDeclaredFields()) {
                 DataField declaredAnnotation = f.getAnnotation(DataField.class);
-                if(declaredAnnotation != null) {
-                    String colName = declaredAnnotation.columnName();
-                    if(colName == null || colName.isEmpty()) {
-                        colName = toSnakeCase(f.getName());
-                    }
-                    Transformer transformer = Transformer.getTransformerFor(Transformer.JavaClassSqlTypePair.of(
-                            f.getType(),
-                            declaredAnnotation.sqliteType()
-                    ));
-                    out.add(new DataFieldInfo(f,
-                            colName,
-                            declaredAnnotation.sqliteType(),
-                            declaredAnnotation.sqliteConstraints(),
-                            declaredAnnotation.constructorArgumentPositionIndex(),
-                            transformer
-                            )
-                    );
+                if(declaredAnnotation == null) {
+                    continue;
                 }
+                if(f.getType().isPrimitive()) {
+                    throw new IllegalArgumentException("Can not extract data field information on class type " + classType + ": field " + f.getName() + " is of primitive type " + f.getType());
+                }
+                String colName = declaredAnnotation.columnName();
+                if(colName == null || colName.isEmpty()) {
+                    colName = toSnakeCase(f.getName());
+                }
+                Transformer transformer = Transformer.getTransformerFor(Transformer.JavaClassSqlTypePair.of(
+                        f.getType(),
+                        declaredAnnotation.sqliteType()
+                ));
+                out.add(new DataFieldInfo(f,
+                        colName,
+                        declaredAnnotation.sqliteType(),
+                        declaredAnnotation.sqliteConstraints(),
+                        declaredAnnotation.constructorArgumentPositionIndex(),
+                        transformer
+                        )
+                );
             }
             return out;
         }

@@ -67,7 +67,7 @@ enum Transformer {
     );
 
     /**
-     * Returns a suiting transformer for teh given type pair. Throws {@link NullPointerException} if no transformer could be found.
+     * Returns a suiting transformer for the given type pair. Throws {@link NullPointerException} if no transformer could be found.
      */
     public static Transformer getTransformerFor(JavaClassSqlTypePair javaClassSqlTypePair) {
         return Objects.requireNonNull(JAVA_AND_SQLTYPE_TO_TRANSFORMER_MAP.getOrDefault(javaClassSqlTypePair, null),

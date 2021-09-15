@@ -36,16 +36,16 @@ public class NewContextAction implements ActionListener {
                     homeSourceDialogPanel.getHomeBar().getPlainTextContent(),
                     homeSourceDialogPanel.getSourceBar().getPlainTextContent(),
                     "New Context",
-                    "Choose a location where the new context's home directory should be created and where CopySnap can find the source directory."
+                    "Choose two locations:\n\t1. Where to store made backups (home directory)?\n\t2. What should be backed up (source directory)?"
             );
-            if (response == JOptionPane.OK_OPTION) {
+            if (response != JOptionPane.OK_OPTION) {
                 // cancel option
                 return null;
             }
             try {
                 Path sourcePath = homeSourceDialogPanel.getSourceBar().getPath();
                 Path homePath = homeSourceDialogPanel.getHomeBar().getPath();
-                context = Context.createNewContextAndInitialise(sourcePath, homePath);
+                context = Context.createNewContextInitialiseAndSave(sourcePath, homePath);
             } catch (InvalidPathSelectionException e) {
                 MessageUtils.showInfoMessage(null, "Given paths were invalid: " + e, "Invalid paths");
             }

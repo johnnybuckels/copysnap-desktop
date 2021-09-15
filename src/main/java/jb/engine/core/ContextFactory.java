@@ -1,40 +1,27 @@
 package jb.engine.core;
 
 import jb.engine.core.data.DatabaseManager;
-import jb.engine.exceptions.ContextException;
 import jb.engine.exceptions.NotADirectoryException;
 import jb.engine.exceptions.ObjectCreatorException;
 
-import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
-
-import static jb.engine.utils.GeneralUtils.getNowAsString;
 
 public class ContextFactory implements ObjectCreator<Context> {
 
     /**
      * Creates a new context instance. This context is not yet initialised on disc and not saved.
      */
-    public static Context createNewContext(Path sourcePath, Path initialPath) {
-        final Path homePathCandidate = Context.determineHomeDirectoryPath(sourcePath, initialPath);
-        Path homePath = homePathCandidate;
-        try {
-            if(!Files.isDirectory(sourcePath)) {
-                throw new NotADirectoryException(sourcePath);
-            } else if(!Files.isDirectory(initialPath)) {
-                throw new NotADirectoryException(initialPath);
-            } else if (Files.list(initialPath).anyMatch(path -> Files.isDirectory(path) && path.getFileName().equals(homePathCandidate.getFileName()))) {
-                // create alternative home directory
-                homePath = homePathCandidate.getParent().resolve(homePathCandidate.getFileName().toString() + "_" + getNowAsString());
-            }
-        } catch(IOException e) {
-            throw new ContextException("Could not determine validity of context creation command");
+    public static Context createNewContext(Path sourcePath, Path newHomePath) {
+        if(!Files.isDirectory(sourcePath)) {
+            throw new NotADirectoryException(sourcePath);
+        } else if(!Files.isDirectory(newHomePath)) {
+            throw new NotADirectoryException(newHomePath);
         }
         return new Context(
                 sourcePath,
-                homePath,
+                newHomePath,
                 Context.getContextName(sourcePath),
                 Instant.now(),
                 DatabaseManager.getNewIdValue()

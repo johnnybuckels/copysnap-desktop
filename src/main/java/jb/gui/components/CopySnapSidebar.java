@@ -3,10 +3,7 @@ package jb.gui.components;
 import jb.engine.core.Context;
 import jb.engine.core.SnapshotInfo;
 import jb.engine.reporting.CopyProgress;
-import jb.engine.utils.GeneralUtils;
-import jb.gui.constants.CopySnapFonts;
 import jb.gui.constants.CopySnapGeometry;
-import jb.gui.exceptions.CopySnapException;
 import jb.gui.utils.LayoutUtils;
 import jb.gui.utils.MessageUtils;
 import jb.gui.worker.BackgroundWorker;
@@ -145,9 +142,9 @@ public class CopySnapSidebar extends JPanel {
         if(context == null) {
             return;
         }
-        SnapshotNameDialog dialog = new SnapshotNameDialog();
+        TextInputDialog dialog = new TextInputDialog();
         if(dialog.showDialog("Plain Copy") == JOptionPane.OK_OPTION) {
-            String runName = getValidatedTextFieldContent(dialog.nameField);
+            String runName = dialog.getNotNullNotBlankTextFieldContent();
             BackgroundWorker.builderForJob(copyProgress -> context.plainCopyAndSave(runName, copyProgress), CopyProgress.class)
                     .withJobName("Creating plain copy")
                     .withDoneRunnable(this::refreshListDisplay)
@@ -174,9 +171,9 @@ public class CopySnapSidebar extends JPanel {
                     );
             return;
         }
-        SnapshotNameDialog dialog = new SnapshotNameDialog();
+        TextInputDialog dialog = new TextInputDialog();
         if(dialog.showDialog("New Snapshot") == JOptionPane.OK_OPTION) {
-            String runName = getValidatedTextFieldContent(dialog.nameField);
+            String runName = dialog.getNotNullNotBlankTextFieldContent();
             BackgroundWorker.builderForJob(copyProgress -> context.snapshotAndSave(runName, copyProgress), CopyProgress.class)
                     .withJobName("Creating Snapshot")
                     .withDoneRunnable(this::refreshListDisplay)
@@ -208,78 +205,6 @@ public class CopySnapSidebar extends JPanel {
                 .withDoneRunnable(this::refreshListDisplay)
                 .build()
                 .showAndExecute();
-    }
-
-    /**
-     * Returns teh text field string if it is not blank or null or throws a runtime exception.
-     */
-    private String getValidatedTextFieldContent(JTextField textField) {
-       if(textField.getText() == null || textField.getText().isBlank()) {
-           throw new CopySnapException("Invalid text field content: " + textField.getText());
-       }
-       return textField.getText();
-    }
-
-    /**
-     * Simple class for showing a dialog to retrieve a user input String.
-     */
-    private static class SnapshotNameDialog extends JPanel {
-
-        private static final int MAX_STRING_LENGTH = 80;
-
-        private final JTextField nameField;
-
-        private SnapshotNameDialog() {
-            this.setLayout(new GridBagLayout());
-            this.nameField = new JTextField(GeneralUtils.getNowAsString());
-            this.nameField.select(0, nameField.getText().length());
-            // TODO: Fix this
-            // this.nameField.addAncestorListener(new GeneralUtils.TextFieldAncestorListener());
-            arrangeContents();
-        }
-
-        private void arrangeContents() {
-            GridBagConstraints c = new GridBagConstraints();
-            // label
-            c.gridx = 0;
-            c.gridy = 0;
-            c.weightx = 1.0;
-            c.anchor = GridBagConstraints.LINE_START;
-            c.fill = GridBagConstraints.HORIZONTAL;
-            c.insets = new Insets(10, 10, 5, 10);
-            JLabel label = new JLabel("Enter a name for this run:");
-            label.setFont(CopySnapFonts.LABEL_TEXT_FONT);
-            label.setPreferredSize(new Dimension(0, CopySnapGeometry.BUTTON_HEIGHT));
-            this.add(label, c);
-            // text field
-            c = new GridBagConstraints();
-            c.gridx = 0;
-            c.gridy = 1;
-            c.weightx = 1.0;
-            c.anchor = GridBagConstraints.LINE_START;
-            c.fill = GridBagConstraints.HORIZONTAL;
-            c.insets = new Insets(5, 10, 5, 10);
-            nameField.setPreferredSize(new Dimension(400, CopySnapGeometry.BUTTON_HEIGHT));
-            this.add(nameField, c);
-        }
-
-        public int showDialog(String actionName) {
-            return JOptionPane.showConfirmDialog(
-                    this,
-                    this,
-                    actionName,
-                    JOptionPane.OK_CANCEL_OPTION,
-                    JOptionPane.PLAIN_MESSAGE
-            );
-        }
-
-        public String getTextFieldContent() {
-            if(nameField.getText() == null) {
-                return "";
-            }
-            return nameField.getText().substring(Integer.min(nameField.getText().length(), MAX_STRING_LENGTH));
-        }
-
     }
 
 }

@@ -33,6 +33,7 @@ public class DatabaseManager {
 
     private static final DatabaseToolkit<Context> CONTEXT_DATABASE_TOOLKIT = DatabaseToolkit.forType(Context.class, new ContextFactory());
     private static final DatabaseToolkit<SnapshotInfo> SNAPSHOT_INFO_DATABASE_TOOLKIT = DatabaseToolkit.forType(SnapshotInfo.class, new SnapshotInfoFactory());
+    private static final DatabaseToolkit<LatestState> LATEST_STATE_DATABASE_TOOLKIT = DatabaseToolkit.forType(LatestState.class, LatestState::createFromArgs);
 
     // ----------------- Error message prefixes
 
@@ -45,6 +46,13 @@ public class DatabaseManager {
     private static DatabaseManager DATABASE_MANAGER = null;
 
     private static boolean allowReinitialization = false;
+
+    /**
+     * @return {@code UUID.randomUUID().toString()}
+     */
+    public static String getNewIdValue() {
+        return UUID.randomUUID().toString();
+    }
 
     /**
      * If set to false (the default) initializing a DatabaseManager more than once will result in an Exception.
@@ -121,16 +129,11 @@ public class DatabaseManager {
         }
     }
 
-    public void renewConnection(String databaseConnectionName) throws SQLException {
-        Connection connection = DriverManager.getConnection(databaseConnectionName);
-        connection.setAutoCommit(false);
-        c = connection;
-    }
 
     /**
      * Prints some information about the metadata stored in the given connection.
      */
-    public void printCurrentConnectionMetadata() throws SQLException {
+    private void printCurrentConnectionMetadata() throws SQLException {
         if(c == null) {
             System.out.println("Printing current connection metadata not possible: current connection is null");
         }
@@ -147,6 +150,7 @@ public class DatabaseManager {
         }
         CONTEXT_DATABASE_TOOLKIT.createTableIfNotExists(c);
         SNAPSHOT_INFO_DATABASE_TOOLKIT.createTableIfNotExists(c);
+        LATEST_STATE_DATABASE_TOOLKIT.createTableIfNotExists(c);
     }
     // ----------------- Object Fields
 
@@ -157,11 +161,10 @@ public class DatabaseManager {
 
     // ----------------- Usable methods
 
-    /**
-     * @return {@code UUID.randomUUID().toString()}
-     */
-    public static String getNewIdValue() {
-        return UUID.randomUUID().toString();
+    public void renewConnection(String databaseConnectionName) throws SQLException {
+        Connection connection = DriverManager.getConnection(databaseConnectionName);
+        connection.setAutoCommit(false);
+        c = connection;
     }
 
     public Connection getConnection() {
@@ -215,6 +218,29 @@ public class DatabaseManager {
     }
 
     /**
+     * Loads and returns the latest used context.
+     */
+    public Optional<Context> loadLastUsedContext() throws DatabaseCommunicationException {
+        Optional<LatestState> latestStateOpt = LATEST_STATE_DATABASE_TOOLKIT.findById(c, LatestState.STATE_ID);
+        if(latestStateOpt.isPresent()) {
+            return loadContext(latestStateOpt.get().getLastUsedContextId());
+        } else {
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * Saves the given LatestState as the new latest state.
+     */
+    public void saveOrUpdateLatestState(LatestState latestState) throws DatabaseCommunicationException{
+        if(LATEST_STATE_DATABASE_TOOLKIT.exists(c, latestState)) {
+            LATEST_STATE_DATABASE_TOOLKIT.update(c, latestState);
+        } else {
+            LATEST_STATE_DATABASE_TOOLKIT.insert(c, latestState);
+        }
+    }
+
+    /**
      * Returns a list of information about all stored contexts.
      */
     public List<ContextInfoContainer> getInfoOfAllContext() throws DatabaseCommunicationException {
@@ -230,7 +256,10 @@ public class DatabaseManager {
         }
         return out;
     }
-    
+
+    /**
+     * Loads the context with the given id from the database.
+     */
     public Optional<Context> loadContext(String contextId) throws DatabaseCommunicationException {
         if(contextId == null) {
             throw new IllegalArgumentException("Context id can not be null");
@@ -241,6 +270,7 @@ public class DatabaseManager {
             storedContextOpt.get().setSnapshotInfoList(
                     SNAPSHOT_INFO_DATABASE_TOOLKIT.findByColumn(c, SnapshotInfo.CONTEXT_IDENTIFYING_SNAPSHOT_COLUMN_NAME, contextId)
             );
+            saveOrUpdateLatestState(new LatestState(storedContextOpt.get().getId()));
         }
         return storedContextOpt;
     }
@@ -264,6 +294,7 @@ public class DatabaseManager {
         }
         // save, update or delete associated SnapshotInfo objects
         safeUpdateOrDeleteSnapshotInfo(contextToSafe.getId(), contextToSafe.getSnapshotInfoList());
+        saveOrUpdateLatestState(new LatestState(contextToSafe.getId()));
     }
 
 

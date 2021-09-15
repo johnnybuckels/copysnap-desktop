@@ -7,9 +7,9 @@ import jb.engine.utils.PathUtils;
 import org.junit.jupiter.api.*;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -17,24 +17,32 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class DatabaseTest {
 
-    private static Path SOURCE_PATH = Path.of("/home/johannes/Dokumente/DokumenteHDD/Java/TestOut/TestSource");
-    private static Path INITIAL_PATH = Path.of("/home/johannes/Dokumente/DokumenteHDD/Java/TestOut/Managed");
+    private static final Path SOURCE_PATH = Path.of("/home/johannes/Dokumente/DokumenteHDD/Java/TestOut/TestSource");
+
+    private static final String TEMP_DIR_STRING = System.getProperty("java.io.tmpdir");
+
+    private static final Path HOME_PATH = Path.of(TEMP_DIR_STRING).resolve("copysnaptest1");
+    private static final Path HOME_PATH2 = Path.of(TEMP_DIR_STRING).resolve("copysnaptest2");
 
     private static final String TEST_DB_NAME = "test.db";
     private static final String TEST_DATABASE_MANAGER_NAME = "TestManager";
 
     private static Context testContext;
+    private static Context testContext2;
 
 
 
     @BeforeAll
-    public static void setupDatabaseManager() {
+    public static void setupDatabaseManager() throws IOException {
         DatabaseManager.initializeCustomManager(TEST_DB_NAME, TEST_DATABASE_MANAGER_NAME);
+        Files.createDirectories(HOME_PATH);
+        Files.createDirectories(HOME_PATH2);
     }
 
     @BeforeEach
     public void setup() {
-        testContext = Context.createNewContextAndInitialise(SOURCE_PATH, INITIAL_PATH);
+        testContext = Context.createNewContextInitialiseAndSave(SOURCE_PATH, HOME_PATH);
+        testContext2 = Context.createNewContextInitialiseAndSave(SOURCE_PATH, HOME_PATH2);
     }
 
     @AfterEach
@@ -46,7 +54,8 @@ public class DatabaseTest {
     @AfterAll
     public static void tearDown() throws DatabaseCommunicationException, IOException {
         // delete home path of test context
-        PathUtils.deleteFileOrDirectory(testContext.getHomePath());
+        PathUtils.deleteFileOrDirectory(HOME_PATH);
+        PathUtils.deleteFileOrDirectory(HOME_PATH2);
         // delete database file
         DatabaseManager.getInstance().deleteDatabase();
     }
@@ -93,6 +102,17 @@ public class DatabaseTest {
         testMapEquality(copyMap, restoredMap);
     }
 
+    @Test
+    public void testLoadingLatestContext() throws DatabaseCommunicationException {
+        DatabaseManager.getInstance().loadContext(testContext.getId());
+        Context ctxLast = DatabaseManager.getInstance().loadLastUsedContext().get();
+        assertEquals(testContext.getId(), ctxLast.getId());
+
+        DatabaseManager.getInstance().loadContext(testContext2.getId());
+        ctxLast = DatabaseManager.getInstance().loadLastUsedContext().get();
+        assertEquals(testContext2.getId(), ctxLast.getId());
+    }
+
 
     private void testMapEquality(Map<String, byte[]> map1, Map<String, byte[]> map2) {
         for(String key1 : map1.keySet()) {
@@ -111,7 +131,7 @@ public class DatabaseTest {
         int maxPathLength = map.keySet().stream().mapToInt(String::length).max().getAsInt();
         StringBuilder sb = new StringBuilder();
         map.entrySet().stream()
-                .sorted(Comparator.comparing(Map.Entry::getKey))
+                .sorted(Map.Entry.comparingByKey())
                 .forEach(entry -> {
                     String keyString = entry.getKey();
                     sb

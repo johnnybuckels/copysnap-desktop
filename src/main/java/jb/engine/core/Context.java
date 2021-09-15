@@ -16,7 +16,6 @@ import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.sql.SQLException;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -88,11 +87,6 @@ public class Context {
 
     private final List<SnapshotInfo> snapshotInfoList = new LinkedList<>();
 
-    // ---------------------------------------------------------------------------
-
-    // TODO: Integrate Settings into job execution of this context.
-    private ContextSetting contextSetting;
-
     // -------------------- Create and load Context
 
     public static List<ContextInfoContainer> getStoredContextInfo() throws DatabaseCommunicationException {
@@ -107,11 +101,19 @@ public class Context {
     }
 
     /**
+     * Loads the latest loaded or saved context from the database. returns an empty Optional, if there is no such
+     * latest context.
+     */
+    public static Optional<Context> loadLatestUsedContext() throws DatabaseCommunicationException {
+        return DatabaseManager.getInstance().loadLastUsedContext();
+    }
+
+    /**
      * Creates and initialises a new Context by creating appropriated directories and files at the given location.
      * The newly created context is saved.
      */
-    public static Context createNewContextAndInitialise(Path sourcePath, Path initialPath) {
-        Context newContext = ContextFactory.createNewContext(sourcePath, initialPath);
+    public static Context createNewContextInitialiseAndSave(Path sourcePath, Path newHomePath) {
+        Context newContext = ContextFactory.createNewContext(sourcePath, newHomePath);
         try {
             // initialize directories
             newContext.generateDirectoriesAndFiles();
@@ -177,7 +179,11 @@ public class Context {
             doneTargetPathCount++;
         }
         percentageConsumer.accept(BigDecimal.valueOf((double)doneTargetPathCount/targetPaths.size()));
-        contextToRestore.save();
+        try {
+            contextToRestore.save();
+        } catch (DatabaseCommunicationException e) {
+            throw new ContextException("Could not save restored context to database: " + e, e);
+        }
         return contextToRestore;
     }
 
@@ -215,19 +221,6 @@ public class Context {
         this.id = id;
         this.allPaths = createInternalPathMapOfContext(sourcePath, homePath);
         this.backupContents = generateBackupFileContent();
-    }
-
-    /**
-     * Creates the path to the directory this context manages. The directory will be a subdirectory of
-     * {@code initialPath} and its name will contain the filename of {@code sourcePath}
-     */
-    protected static Path determineHomeDirectoryPath(Path sourcePath, Path initialPath) {
-        String normalizedSourceName = sourcePath.getFileName().toString().replace(" ","");
-        String directoryName = String.format("%s-%s",
-                DIRECTORY_NAME_COPY_SNAP,
-                normalizedSourceName.substring(0, 1).toUpperCase() + normalizedSourceName.substring(1)
-        );
-        return initialPath.resolve(directoryName);
     }
 
     /**
@@ -323,7 +316,7 @@ public class Context {
 
     // ----- Internal Core Methods
 
-    private ProblemReport createPlainCopy(String runName, Path runTargetDirectory, Consumer<CopyProgress> copyProgressConsumer) {
+    private ProblemReport createPlainCopy(String runName, Path runTargetDirectory, Consumer<CopyProgress> copyProgressConsumer) throws DatabaseCommunicationException {
         CopyProgress copyProgress = CopyProgress.withProgressConsumer(copyProgressConsumer);  // new empty progress
         HashMap<Path, ByteBuffer> currentSourceChecksumMap = computeCurrentSourceChecksumMap(copyProgress);
         ProblemReport problemReport = getCopyServiceForRun(runTargetDirectory).plainCopy();
@@ -332,7 +325,7 @@ public class Context {
         return problemReport;
     }
 
-    private ProblemReport createSnapshot(String runName, Path runTargetDirectory, Consumer<CopyProgress> progressConsumer) throws NotFoundException {
+    private ProblemReport createSnapshot(String runName, Path runTargetDirectory, Consumer<CopyProgress> progressConsumer) throws NotFoundException, DatabaseCommunicationException {
         CopyProgress copyProgress = CopyProgress.withProgressConsumer(progressConsumer);  // new empty progress
         HashMap<ByteBuffer, Path> comparisonMapInverted = loadLatestChecksumMapInverted();
         HashMap<Path, ByteBuffer> currentSourceChecksumMap = computeCurrentSourceChecksumMap(copyProgress);
@@ -357,12 +350,12 @@ public class Context {
         if(latestInfo != null) {
             // delete snapshot info
             snapshotInfoList.remove(latestInfo);
-            save();
         }
         // Try to delete target directory
         try {
+            save();
             PathUtils.deleteFileOrDirectory(runTargetPath);
-        } catch (IOException | UncheckedIOException | IllegalArgumentException e) {
+        } catch (IOException | UncheckedIOException | IllegalArgumentException | DatabaseCommunicationException e) {
             throw new RollbackException("Could not delete target directory", e);
         }
     }
@@ -428,12 +421,8 @@ public class Context {
     /**
      * Saves this context and all attached SnapshotInfo items to the database.
      */
-    public void save() {
-        try {
-            DatabaseManager.getInstance().safeOrUpdateContext(this);
-        } catch (SQLException e) {
-            throw new ContextException("Could not save this snapshot to database: " + e, e);
-        }
+    public void save() throws DatabaseCommunicationException {
+        DatabaseManager.getInstance().safeOrUpdateContext(this);
     }
 
     /**
