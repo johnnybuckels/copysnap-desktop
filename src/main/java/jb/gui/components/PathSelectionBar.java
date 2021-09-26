@@ -1,19 +1,18 @@
 package jb.gui.components;
 
+import jb.gui.components.listeners.PathSelectionBarFocusListener;
+import jb.gui.components.listeners.TextFieldPathCompletionKeyListener;
 import jb.gui.constants.CopySnapFonts;
 import jb.gui.constants.CopySnapGeometry;
 import jb.gui.exceptions.InvalidPathSelectionException;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.FocusEvent;
-import java.awt.event.FocusListener;
-import java.awt.event.KeyEvent;
-import java.awt.event.KeyListener;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
-import java.util.ArrayList;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.function.Consumer;
 
 public class PathSelectionBar extends JPanel {
@@ -25,8 +24,8 @@ public class PathSelectionBar extends JPanel {
     private final String labelText;
     private final double labelWidthRatio;
 
+    private final List<Consumer<Path>> pathConsumers = new LinkedList<>();
     private Path fixRootPath = null;
-    private ArrayList<Consumer<Path>> pathConsumers = new ArrayList<>();
 
     public PathSelectionBar(String labelText, double labelWidthRatio) {
         if (labelWidthRatio < 0 || labelWidthRatio > 1.0 - BUTTON_WIDTH_RATIO) {
@@ -38,8 +37,15 @@ public class PathSelectionBar extends JPanel {
         this.textField.setFont(CopySnapFonts.TEXT_FIELD_FONT);
         this.labelText = labelText;
         this.labelWidthRatio = labelWidthRatio;
-        this.textField.addKeyListener(new PathSelectionBarKeyListener());
-        this.textField.addFocusListener(new PathSelectionBarFocusListener());
+        this.textField.setFocusTraversalKeysEnabled(false);
+        this.textField.addKeyListener(new TextFieldPathCompletionKeyListener(this.textField,
+                        str -> {
+                            validateAndSetTextFieldValue(str);
+                            pathConsumers.forEach(consumer -> consumer.accept(Path.of(str)));
+                        },
+                        this::validateAndSetTextFieldValue
+        ));
+        addFocusListener(new PathSelectionBarFocusListener(this));
         applyVisuals();
     }
 
@@ -107,6 +113,20 @@ public class PathSelectionBar extends JPanel {
 
     public JTextField getTextField() {
         return textField;
+    }
+
+    /**
+     * @return length of string contained in this bar's text field
+     */
+    public int getTextLength() {
+        return textField.getText().length();
+    }
+
+    /**
+     * @return {@code Path.of(textField.getText())}
+     */
+    public Path getPlainPath() {
+        return Path.of(textField.getText());
     }
 
     /**
@@ -198,9 +218,9 @@ public class PathSelectionBar extends JPanel {
     }
 
     /**
-     * Returns a the String value from the given path. The path is validated against the registered fixRootPath of this
-     * container. If there is no such root path registered, this method acts like {@code Path.toString}. Otherwise,
-     * this method checks, if the given path is a childpath of the registered root path this method returns {@code pathString.toString()} else
+     * Returns the String value from the given path. The path is validated against the registered fixRootPath of this
+     * container. If there is no such root path registered, this method acts like {@code Path.toString}.
+     * Otherwise, this method checks, if the given path is a child path of the registered root path. If that is true, {@code pathString.toString()} is returned, else
      * it returns the string value of the registered root path.
      */
     public String getValidatedTextFieldValueFromPath(Path path) {
@@ -221,35 +241,8 @@ public class PathSelectionBar extends JPanel {
         return out;
     }
 
-    private final class PathSelectionBarKeyListener implements KeyListener {
-        @Override
-        public void keyTyped(KeyEvent e) {
-        }
-
-        @Override
-        public void keyPressed(KeyEvent e) {
-            if (e.getKeyCode() == KeyEvent.VK_ENTER) {
-                validateAndSetTextFieldValue(getValidatedTextFieldValueFromString(textField.getText()));
-                // send string path to attached consumer
-                Path pathToConsume = Path.of(textField.getText());
-                pathConsumers.forEach(consumer -> consumer.accept(pathToConsume));
-            }
-        }
-
-        @Override
-        public void keyReleased(KeyEvent e) {
-        }
-    }
-
-    private final class PathSelectionBarFocusListener implements FocusListener {
-        @Override
-        public void focusGained(FocusEvent e) {
-        }
-
-        @Override
-        public void focusLost(FocusEvent e) {
-            validateAndSetTextFieldValue(getValidatedTextFieldValueFromString(textField.getText()));
-        }
+    public List<Consumer<Path>> getPathConsumers() {
+        return pathConsumers;
     }
 
 }
