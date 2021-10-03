@@ -20,7 +20,7 @@ public class PathCompletionHelper {
         try {
             return Files.list(basePathToUse)
                     .sorted()
-                    .filter(p -> p.getFileName().toString().startsWith(prefixToUse))
+                    .filter(p -> p.getFileName().toString().toLowerCase().startsWith(prefixToUse.toLowerCase()))
                     .iterator();
         } catch (IOException e) {
             return Collections.emptyIterator();

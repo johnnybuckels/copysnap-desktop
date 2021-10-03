@@ -12,6 +12,9 @@ import java.util.Iterator;
 import java.util.function.Consumer;
 import java.util.logging.Logger;
 
+/**
+ * Implementing Functionality for suggesting file names on Tab-key presses and to select files in the file tree on Enter-Key presses.
+ */
 public final class TextFieldPathCompletionKeyListener implements KeyListener {
 
     private final Logger logger = Logger.getLogger(PathSelectionBar.class.getSimpleName());
@@ -38,16 +41,17 @@ public final class TextFieldPathCompletionKeyListener implements KeyListener {
      */
     @Override
     public void keyPressed(KeyEvent e) {
-        if(e.getSource() != textField) {
+        if (e.getSource() != textField) {
             logger.warning("event" + e + "does not reside from " + textField + " but from " + e.getSource());
             return;
         }
         switch (e.getKeyCode()) {
             case KeyEvent.VK_ENTER:
                 contentConsumerEnter.accept(textField.getText());
+                currentPathIterator = null;
                 break;
             case KeyEvent.VK_TAB:
-                if(currentPathIterator == null) {
+                if (currentPathIterator == null) {
                     initializeNewPathIterator();
                 }
                 displayNextPathOnSelectionBar();
@@ -66,7 +70,7 @@ public final class TextFieldPathCompletionKeyListener implements KeyListener {
         Path currentSelectionPathPlain = Path.of(textField.getText());
         Path searchBasePath;
         String searchPrefix;
-        if(Files.exists(currentSelectionPathPlain)) {
+        if (Files.exists(currentSelectionPathPlain)) {
             searchBasePath = currentSelectionPathPlain;
             searchPrefix = "";
         } else {
@@ -77,7 +81,7 @@ public final class TextFieldPathCompletionKeyListener implements KeyListener {
     }
 
     private void displayNextPathOnSelectionBar() {
-        if(currentPathIterator == null || !currentPathIterator.hasNext()) {
+        if (currentPathIterator == null || !currentPathIterator.hasNext()) {
             return;
         }
         // insert path into text field
@@ -88,11 +92,10 @@ public final class TextFieldPathCompletionKeyListener implements KeyListener {
         int selectionStart = nextPath.getParent().toString().length();
         int textLength = textField.getText().length();
         textField.setCaretPosition(textLength);
-        if(selectionStart < textLength) {
+        if (selectionStart < textLength) {
             textField.select(selectionStart, textLength);
         }
     }
-
 
 
 }
