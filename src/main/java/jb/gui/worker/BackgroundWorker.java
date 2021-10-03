@@ -107,7 +107,7 @@ public class BackgroundWorker<T, U> extends SwingWorker<T, U> {
 
 
     @Override
-    public T doInBackground() {
+    protected T doInBackground() {
         return jobToDoWithIntermediateConsumer.apply(this::publish);
     }
 
@@ -142,9 +142,19 @@ public class BackgroundWorker<T, U> extends SwingWorker<T, U> {
         }
     }
 
-    public void showAndExecute() {
+    /**
+     * Start background task and show a window with progress bar.
+     */
+    public void executeAndShow() {
         copySnapProgressFrame.addWindowListener(new SubWindowListener(() -> cancel(true)));
         copySnapProgressFrame.setVisible(true);
+        this.execute();
+    }
+
+    /**
+     * Start the background task without visible notice.
+     */
+    public void executeSilently() {
         this.execute();
     }
 
