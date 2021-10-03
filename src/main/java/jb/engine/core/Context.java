@@ -35,14 +35,12 @@ import java.util.stream.Stream;
  */
 public class Context {
 
-    // TODO: Add logging
     private static final Logger logger = Logger.getLogger(Context.class.getName());
 
     // Names of files and directories used by CopySnap context
-    private static final String DIRECTORY_NAME_COPY_SNAP = "CopySnap";
     private static final String DIRECTORY_NAME_INTERNAL_DATA = ".copysnap";
     private static final String DIRECTORY_NAME_TARGET = "data";
-    private static final String FILE_NAME_BACKUP = "backup.txt";
+    private static final String FILE_NAME_CONTEXT_INFO = "info.txt";
     private static final String BACKUP_FILE_DELIMITER = "=";
 
     // Keys for saving easily saving and loading a context
@@ -50,7 +48,8 @@ public class Context {
     public static final String SOURCE_KEY = "source";
     public static final String TARGET_KEY = "target";
     public static final String INTERNAL_KEY = "internal";
-    public static final String BACKUP_INFO = "backup";
+    public static final String CONTEXT_INFO_KEY = "info";
+    public static final String VERSION_KEY = "version";
 
     private static final String TIME_PATTERN = "yyyy-MM-dd-HH-mm-ss-SSSS";
 
@@ -139,7 +138,12 @@ public class Context {
      */
     public static Context reconstructContext(Path homePath, Consumer<BigDecimal> percentageConsumer) {
         // load source bath from backup file
-        Path sourcePath = Path.of(Context.readBackupFileContent(homePath).get(SOURCE_KEY));
+        Map<String, String> contextInfo = Context.readContextInfoFileContent(homePath);
+        String versionOfContextToReconstruct = contextInfo.getOrDefault(VERSION_KEY, null);
+        if(!CoreInfo.VERSION.equals(versionOfContextToReconstruct)) {
+            logger.warning("The CopySnap version of the context at " + homePath + " differs from the current CopySnap version: " + versionOfContextToReconstruct + ", " + CoreInfo.VERSION);
+        }
+        Path sourcePath = Path.of(contextInfo.get(SOURCE_KEY));
         logger.info("Source path info from backup file loaded: " + sourcePath);
         // search for source path and home path in database
         Optional<Context> foundContextOpt = restoreContextFromDatabase(homePath);
@@ -155,30 +159,8 @@ public class Context {
         logger.info("Trying to restore context from disc");
         Context contextToRestore = new Context(sourcePath, homePath, homePath.getFileName() + "_restored", Instant.now(), DatabaseManager.getNewIdValue());
         contextToRestore.checkAndRestoreIntegrityOfLoadedPaths();
-        // restore snapshot info objects
-        List<Path> targetPaths;
-        try (Stream<Path> dirStream = Files.list(contextToRestore.allPaths.get(TARGET_KEY)).filter(Files::isDirectory)) {
-             targetPaths = dirStream.collect(Collectors.toList());
-        } catch(IOException e) {
-            throw new UncheckedIOException("Could not iterate over file stream to retrieve target directories in " + contextToRestore.allPaths.get(TARGET_KEY) + ": " + e, e);
-        }
-        targetPaths.sort(Comparator.reverseOrder());  // sort such that newest snapshot items are restored first
-        int doneTargetPathCount = 0;
-        for(Path targetPath : targetPaths) {
-            percentageConsumer.accept(BigDecimal.valueOf((double)doneTargetPathCount/targetPaths.size()));
-            Path actualPathForChecksum = targetPath.resolve(sourcePath.getFileName());
-            if(!Files.isDirectory(actualPathForChecksum)) {
-                logger.warning("Expected directory at " + actualPathForChecksum + ": Skipping reconstruction of snapshot info at path " + targetPath);
-            }
-            try {
-                HashMap<Path, ByteBuffer> targetChecksumMap = HashService.computeChecksumMap(actualPathForChecksum);
-                contextToRestore.addSnapshotInfoOfRun(targetPath.getFileName() + "_restored", targetPath, targetChecksumMap, CopyType.RESTORED, false);
-            } catch (Exception e) {
-                logger.warning("Could not compute checksum map: Skipping reconstruction of snapshot info at path " + targetPath);
-            }
-            doneTargetPathCount++;
-        }
-        percentageConsumer.accept(BigDecimal.valueOf((double)doneTargetPathCount/targetPaths.size()));
+        restoreAndInjectContextInfo(contextToRestore, percentageConsumer);
+        percentageConsumer.accept(BigDecimal.ONE);  // transmit 100% progress
         try {
             contextToRestore.save();
         } catch (DatabaseCommunicationException e) {
@@ -208,6 +190,36 @@ public class Context {
             foundContextOpt = Optional.empty();
         }
         return foundContextOpt;
+    }
+
+    /**
+     * Reads all directories from the target directory from the context files. Computes checksums for each directory, creates
+     * a SnapshotInfo objects and adds them to the given context.
+     */
+    private static void restoreAndInjectContextInfo(Context contextToInjectInto, Consumer<BigDecimal> percentageConsumer) {
+        // restore snapshot info objects
+        List<Path> targetPaths;
+        try (Stream<Path> dirStream = Files.list(contextToInjectInto.allPaths.get(TARGET_KEY)).filter(Files::isDirectory)) {
+            targetPaths = dirStream.collect(Collectors.toList());
+        } catch(IOException e) {
+            throw new UncheckedIOException("Could not iterate over file stream to retrieve target directories in " + contextToInjectInto.allPaths.get(TARGET_KEY) + ": " + e, e);
+        }
+        targetPaths.sort(Comparator.reverseOrder());  // sort such that newest snapshot items are restored first
+        int doneTargetPathCount = 0;
+        for(Path targetPath : targetPaths) {
+            percentageConsumer.accept(BigDecimal.valueOf((double) doneTargetPathCount/targetPaths.size()));
+            Path actualPathForChecksum = targetPath.resolve(contextToInjectInto.allPaths.get(SOURCE_KEY).getFileName());
+            if(!Files.isDirectory(actualPathForChecksum)) {
+                logger.warning("Expected directory at " + actualPathForChecksum + ": Skipping reconstruction of snapshot info at path " + targetPath);
+            }
+            try {
+                HashMap<Path, ByteBuffer> targetChecksumMap = HashService.computeChecksumMap(actualPathForChecksum);
+                contextToInjectInto.addSnapshotInfoOfRun(targetPath.getFileName() + "_restored", targetPath, targetChecksumMap, CopyType.RESTORED, false);
+            } catch (Exception e) {
+                logger.warning("Could not compute checksum map: Skipping reconstruction of snapshot info at path " + targetPath);
+            }
+            doneTargetPathCount++;
+        }
     }
 
     /**
@@ -247,16 +259,16 @@ public class Context {
             try {
                 Files.createDirectory(allPaths.get(INTERNAL_KEY));
                 // also recreate backup file
-                Files.writeString(allPaths.get(BACKUP_INFO), generateBackupFileContentString(), StandardOpenOption.CREATE_NEW, StandardOpenOption.TRUNCATE_EXISTING);
+                Files.writeString(allPaths.get(CONTEXT_INFO_KEY), generateBackupFileContentString(), StandardOpenOption.CREATE_NEW, StandardOpenOption.TRUNCATE_EXISTING);
             } catch (IOException e) {
                 throw new IntegrityException("Could not restore integrity of internal settings location " + allPaths.get(INTERNAL_KEY) + ": " + e, e);
             }
-        } else if (!Files.isRegularFile(allPaths.get(BACKUP_INFO)) || !allPaths.get(BACKUP_INFO).getFileName().toString().equals(FILE_NAME_BACKUP)) {
-            logger.warning("Internal backup file path of context " + name + " is invalid: " + allPaths.get(BACKUP_INFO) + " is not a regular file or is not named " + FILE_NAME_BACKUP);
+        } else if (!Files.isRegularFile(allPaths.get(CONTEXT_INFO_KEY)) || !allPaths.get(CONTEXT_INFO_KEY).getFileName().toString().equals(FILE_NAME_CONTEXT_INFO)) {
+            logger.warning("Internal backup file path of context " + name + " is invalid: " + allPaths.get(CONTEXT_INFO_KEY) + " is not a regular file or is not named " + FILE_NAME_CONTEXT_INFO);
             try {
-                Files.writeString(allPaths.get(BACKUP_INFO), generateBackupFileContentString(), StandardOpenOption.CREATE_NEW, StandardOpenOption.TRUNCATE_EXISTING);
+                Files.writeString(allPaths.get(CONTEXT_INFO_KEY), generateBackupFileContentString(), StandardOpenOption.CREATE_NEW, StandardOpenOption.TRUNCATE_EXISTING);
             } catch (IOException e) {
-                throw new IntegrityException("Could not restore backup file of internal settings location " + allPaths.get(BACKUP_INFO) + ": " + e, e);
+                throw new IntegrityException("Could not restore backup file of internal settings location " + allPaths.get(CONTEXT_INFO_KEY) + ": " + e, e);
             }
         }
     }
@@ -362,8 +374,8 @@ public class Context {
 
     // -------------------- Internal Methods
 
-    private static Map<String, String> readBackupFileContent(Path homePath) {
-        Path expectedBackupFilePath = homePath.resolve(DIRECTORY_NAME_INTERNAL_DATA).resolve(FILE_NAME_BACKUP);
+    private static Map<String, String> readContextInfoFileContent(Path homePath) {
+        Path expectedBackupFilePath = homePath.resolve(DIRECTORY_NAME_INTERNAL_DATA).resolve(FILE_NAME_CONTEXT_INFO);
         List<String> lines;
         try {
             lines = Files.readAllLines(expectedBackupFilePath);
@@ -390,7 +402,7 @@ public class Context {
         Path internalPath = homePath.resolve(DIRECTORY_NAME_INTERNAL_DATA);
         allPaths.put(Context.TARGET_KEY, homePath.resolve(DIRECTORY_NAME_TARGET));
         allPaths.put(Context.INTERNAL_KEY, internalPath);
-        allPaths.put(Context.BACKUP_INFO, internalPath.resolve(FILE_NAME_BACKUP));
+        allPaths.put(Context.CONTEXT_INFO_KEY, internalPath.resolve(FILE_NAME_CONTEXT_INFO));
 
         return allPaths;
     }
@@ -409,7 +421,7 @@ public class Context {
         Files.createDirectories(allPaths.get(TARGET_KEY));
         Files.createDirectories(allPaths.get(INTERNAL_KEY));
         // write backup file
-        Files.writeString(allPaths.get(BACKUP_INFO), generateBackupFileContentString(), StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        Files.writeString(allPaths.get(CONTEXT_INFO_KEY), generateBackupFileContentString(), StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
     }
 
     private String generateBackupFileContentString() {
