@@ -3,6 +3,7 @@ package jb.gui.components;
 import jb.engine.utils.GeneralUtils;
 import jb.gui.constants.CopySnapFonts;
 import jb.gui.constants.CopySnapGeometry;
+import jb.gui.worker.FocusGetter;
 
 import javax.swing.*;
 import java.awt.*;
@@ -15,15 +16,21 @@ public class TextInputDialog extends JPanel {
     private static final int MAX_STRING_LENGTH = 80;
 
     private final JTextField textField;
+    private final String dialogTitle;
 
-    public TextInputDialog() {
-        this.setLayout(new GridBagLayout());
-        this.textField = new JTextField(GeneralUtils.getNowAsString());
-        this.textField.select(0, textField.getText().length());
-        arrangeContents();
+    public TextInputDialog(String dialogTitle, String labelText) {
+        this(dialogTitle, labelText, GeneralUtils.getNowAsString());
     }
 
-    private void arrangeContents() {
+    public TextInputDialog(String dialogTitle, String labelText, String defaultTextFieldEntry) {
+        this.dialogTitle = dialogTitle;
+        this.setLayout(new GridBagLayout());
+        this.textField = new JTextField(defaultTextFieldEntry);
+        this.textField.select(0, textField.getText().length());
+        arrangeContents(labelText);
+    }
+
+    private void arrangeContents(String labelText) {
         GridBagConstraints c = new GridBagConstraints();
         // label
         c.gridx = 0;
@@ -32,7 +39,7 @@ public class TextInputDialog extends JPanel {
         c.anchor = GridBagConstraints.LINE_START;
         c.fill = GridBagConstraints.HORIZONTAL;
         c.insets = new Insets(10, 10, 5, 10);
-        JLabel label = new JLabel("Enter a name for this run:");
+        JLabel label = new JLabel(labelText);
         label.setFont(CopySnapFonts.LABEL_TEXT_FONT);
         label.setPreferredSize(new Dimension(0, CopySnapGeometry.BUTTON_HEIGHT));
         this.add(label, c);
@@ -46,13 +53,15 @@ public class TextInputDialog extends JPanel {
         c.insets = new Insets(5, 10, 5, 10);
         textField.setPreferredSize(new Dimension(400, CopySnapGeometry.BUTTON_HEIGHT));
         this.add(textField, c);
+        textField.selectAll();
     }
 
-    public int showDialog(String actionName) {
+    public int showDialog() {
+        new FocusGetter(textField).tryToGetFocus();
         return JOptionPane.showConfirmDialog(
+                null,
                 this,
-                this,
-                actionName,
+                dialogTitle,
                 JOptionPane.OK_CANCEL_OPTION,
                 JOptionPane.PLAIN_MESSAGE
         );
