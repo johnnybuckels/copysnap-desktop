@@ -1,6 +1,7 @@
 package jb.gui.windows;
 
 import jb.engine.core.Context;
+import jb.engine.core.CoreInfo;
 import jb.engine.core.SnapshotInfo;
 import jb.engine.exceptions.DatabaseCommunicationException;
 import jb.gui.actions.ExitAction;
@@ -33,7 +34,7 @@ public class MainWindow extends JFrame {
     private final CopySnapDisplay display;
 
     public MainWindow() {
-        super(FRAME_TITLE);
+        super(FRAME_TITLE + " " + CoreInfo.VERSION);
         this.setDefaultCloseOperation(EXIT_ON_CLOSE);
         this.setExtendedState(MAXIMIZED_BOTH);
         initialiseFonts();
@@ -63,7 +64,7 @@ public class MainWindow extends JFrame {
         )
                 .withJobName("Loading last used context")
                 .build()
-                .showAndExecute();
+                .executeAndShow();
     }
 
     private void arrangeMainComponents() {
@@ -167,7 +168,7 @@ public class MainWindow extends JFrame {
                 .withResultConsumer(this::receiveContext)
                 .showIntermediateResults(true)
                 .build()
-                .showAndExecute();
+                .executeAndShow();
     }
 
     private void showSuccessfulContextRetrievalMessage(Context context) {
