@@ -2,8 +2,10 @@ package jb.gui.components;
 
 import jb.engine.core.Context;
 import jb.engine.core.SnapshotInfo;
+import jb.engine.exceptions.DatabaseCommunicationException;
 import jb.engine.reporting.CopyProgress;
 import jb.gui.constants.CopySnapGeometry;
+import jb.gui.exceptions.CopySnapException;
 import jb.gui.utils.LayoutUtils;
 import jb.gui.utils.MessageUtils;
 import jb.gui.worker.BackgroundWorker;
@@ -32,6 +34,7 @@ public class CopySnapSidebar extends JPanel {
      * Creates a sidebar object showing a list of snapshot information of a currently loaded context.
      * Each of these items may be selected by the user.
      * <p>This container also manages its contents visuals.</p>
+     *
      * @param contextSnapshotInfoBiConsumer a method that is called, when a specific SnapshotInfo is selected.
      */
     public CopySnapSidebar(BiConsumer<Context, SnapshotInfo> contextSnapshotInfoBiConsumer) {
@@ -93,17 +96,33 @@ public class CopySnapSidebar extends JPanel {
         refreshListDisplay();
     }
 
+    private void refreshListDisplayAndSaveContext() {
+        refreshListDisplay();
+        BackgroundWorker.builderForJob(this::saveThisContext).build().executeSilently();
+    }
+
+    private void saveThisContext() {
+        if (context == null) {
+            return;
+        }
+        try {
+            context.save();
+        } catch (DatabaseCommunicationException e) {
+            throw new CopySnapException("Could not save currently loaded context: " + e, e);
+        }
+    }
+
     private void refreshListDisplay() {
-        if(context == null) {
+        if (context == null) {
             return;
         }
         snapshotInfoPanel.removeAll();
         snapshotInfoList.clear();
         context.getSnapshotInfoList().sort(Collections.reverseOrder());
-        context.getSnapshotInfoList().forEach(si -> snapshotInfoList.add(new SnapshotInfoGUIItem(si, this::snapshotInfoButtonPressed)));
+        context.getSnapshotInfoList().forEach(si -> snapshotInfoList.add(new SnapshotInfoGUIItem(si, this::snapshotInfoButtonPressed, this::refreshListDisplayAndSaveContext)));
         int row = 0;
-        for(SnapshotInfoGUIItem si : snapshotInfoList) {
-            GridBagConstraints c  = new GridBagConstraints();
+        for (SnapshotInfoGUIItem si : snapshotInfoList) {
+            GridBagConstraints c = new GridBagConstraints();
             c.gridx = 0;
             c.gridy = row;
             c.gridheight = 1;
@@ -113,7 +132,7 @@ public class CopySnapSidebar extends JPanel {
             snapshotInfoPanel.add(si, c);
             row++;
         }
-        GridBagConstraints c  = new GridBagConstraints();
+        GridBagConstraints c = new GridBagConstraints();
         c.gridx = 0;
         c.gridy = row;
         c.gridheight = 1;
@@ -123,7 +142,7 @@ public class CopySnapSidebar extends JPanel {
         c.anchor = GridBagConstraints.PAGE_START;
         snapshotInfoPanel.add(Box.createRigidArea(new Dimension()), c);
         snapshotInfoPanel.revalidate();
-        if(snapshotInfoList.size() > 0) {
+        if (snapshotInfoList.size() > 0) {
             snapshotInfoList.get(0).clickButton();
         }
     }
@@ -139,11 +158,11 @@ public class CopySnapSidebar extends JPanel {
      * Perform a plain copy on the current context and refresh this sidebar.
      */
     public void plainCopy() {
-        if(context == null) {
+        if (context == null) {
             return;
         }
-        TextInputDialog dialog = new TextInputDialog();
-        if(dialog.showDialog("Plain Copy") == JOptionPane.OK_OPTION) {
+        TextInputDialog dialog = new TextInputDialog("Plain Copy", "Run name:");
+        if (dialog.showDialog() == JOptionPane.OK_OPTION) {
             String runName = dialog.getNotNullNotBlankTextFieldContent();
             BackgroundWorker.builderForJob(copyProgress -> context.plainCopyAndSave(runName, copyProgress), CopyProgress.class)
                     .withJobName("Creating plain copy")
@@ -151,7 +170,7 @@ public class CopySnapSidebar extends JPanel {
                     .withStringMessage(ANALYZED_FILE_COUNT_STRING_TEMPLATE, List.of(CopyProgress::getTotalFileCount, CopyProgress::getTrueFileCount, CopyProgress::getDirectoryCount))
                     .showIntermediateResults(true)
                     .build()
-                    .showAndExecute();
+                    .executeAndShow();
         }
     }
 
@@ -159,20 +178,20 @@ public class CopySnapSidebar extends JPanel {
      * Perform a snapshot against the newest Copy-Entry and refresh this sidebar.
      */
     public void snapshot() {
-        if(context == null) {
+        if (context == null) {
             return;
         }
-        if(context.getSnapshotInfoList().isEmpty()) {
+        if (context.getSnapshotInfoList().isEmpty()) {
             JOptionPane.showConfirmDialog(null,
                     "Can not perform snapshot when there is no earlier iteration to compare to",
                     "Can not perform Snapshot",
                     JOptionPane.DEFAULT_OPTION,
                     JOptionPane.INFORMATION_MESSAGE
-                    );
+            );
             return;
         }
-        TextInputDialog dialog = new TextInputDialog();
-        if(dialog.showDialog("New Snapshot") == JOptionPane.OK_OPTION) {
+        TextInputDialog dialog = new TextInputDialog("New Snapshot", "Run name:");
+        if (dialog.showDialog() == JOptionPane.OK_OPTION) {
             String runName = dialog.getNotNullNotBlankTextFieldContent();
             BackgroundWorker.builderForJob(copyProgress -> context.snapshotAndSave(runName, copyProgress), CopyProgress.class)
                     .withJobName("Creating Snapshot")
@@ -181,12 +200,12 @@ public class CopySnapSidebar extends JPanel {
                     .withProgressFunction(copyProgress -> copyProgress.getPercentage().intValue())
                     .showIntermediateResults(true)
                     .build()
-                    .showAndExecute();
+                    .executeAndShow();
         }
     }
 
     public void deleteSelectedSnapshot() {
-        if(context == null || currentSelectedSnapshot == null) {
+        if (context == null || currentSelectedSnapshot == null) {
             return;
         }
         int result = JOptionPane.showConfirmDialog(null,
@@ -197,14 +216,14 @@ public class CopySnapSidebar extends JPanel {
                 "Confirm deletion",
                 JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE
         );
-        if(result != JOptionPane.YES_OPTION) {
+        if (result != JOptionPane.YES_OPTION) {
             return;
         }
         BackgroundWorker.builderForJob(() -> context.deleteSnapshotAndSave(currentSelectedSnapshot))
                 .withJobName("Deleting snapshot")
                 .withDoneRunnable(this::refreshListDisplay)
                 .build()
-                .showAndExecute();
+                .executeAndShow();
     }
 
 }

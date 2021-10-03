@@ -24,7 +24,7 @@ public class SnapshotInfo implements Comparable<SnapshotInfo> {
     @DataField(sqliteType = SQLiteType.TEXT, sqliteConstraints = {SQLiteConstraint.NOT_NULL}, constructorArgumentPositionIndex = 0)
     private final String associatedContextId;
     @DataField(sqliteType = SQLiteType.TEXT, sqliteConstraints = {SQLiteConstraint.NOT_NULL}, constructorArgumentPositionIndex = 1)
-    private final String name;
+    private String name;
     @DataField(sqliteType = SQLiteType.TEXT, sqliteConstraints = {SQLiteConstraint.NOT_NULL, SQLiteConstraint.UNIQUE}, constructorArgumentPositionIndex = 2)
     private final Path runTargetDirectory;
     @DataField(sqliteType = SQLiteType.BLOB, sqliteConstraints = {SQLiteConstraint.NOT_NULL}, constructorArgumentPositionIndex = 3)
@@ -85,6 +85,10 @@ public class SnapshotInfo implements Comparable<SnapshotInfo> {
 
     public String getId() {
         return id;
+    }
+
+    public void setName(String name) {
+        this.name = name;
     }
 
     // Overridden

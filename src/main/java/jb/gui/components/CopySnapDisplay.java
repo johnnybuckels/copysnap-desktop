@@ -264,7 +264,7 @@ public class CopySnapDisplay extends JPanel {
                     .withJobName("Restoring")
                     .withDoneRunnable(this::refreshTreeView)
                     .build()
-                    .showAndExecute();
+                    .executeAndShow();
         } else if(userChoice == 1) {
             // execute override copy
             // copy service is configured to write INTO a directory. in order to override the field at toPath we need to give its parent to the copy service
@@ -273,7 +273,7 @@ public class CopySnapDisplay extends JPanel {
                     .withJobName("Restoring")
                     .withDoneRunnable(this::refreshTreeView)
                     .build()
-                    .showAndExecute();
+                    .executeAndShow();
         }
         // if here: probably cancel
     }
